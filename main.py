@@ -1,4 +1,4 @@
-#Program that creates a parquet dataframe for the first 10 GSM8K questions. We will have three columns: question, CoT and answer.
+#Program that creates a parquet dataframe for GSM8K translated to Zulu. We will have three columns: question, CoT and answer.
 #Corey Webb, Bsc Hons 2025, UCT
 #10/07/2025
 
@@ -35,7 +35,7 @@ def extract_ans(cot_answer):
     split = cot_answer.split("####")
     #Checks that there is one and only one answer
     if len(split) == 2:
-        ans = int(split[1].strip())
+        ans = int(split[1].replace(",", "").strip())
         return ans
     else:
         print("Expected one answer, found {}".format(len(split) - 1))
@@ -44,11 +44,6 @@ def extract_ans(cot_answer):
 
 def main():
     df = pd.read_parquet("hf://datasets/openai/gsm8k/main")
-    #We only want first 10 bc testing
-    df = df[1:11]
-    print("HEAD")
-    print(df)
-    print("length: ", len(df))
 
     questions_zul = []
     cot_zul = []
@@ -74,10 +69,8 @@ def main():
     })
 
     #Create parquet file
-    parquet_path = "GSM8K_Zulu_Sample.parquet"
+    parquet_path = "GSM8K_Zulu.parquet"
     zulu_df.to_parquet(parquet_path, index=False)
-
-    #TODO: Upload to Hugging Face
 
     
 if __name__ == "__main__":

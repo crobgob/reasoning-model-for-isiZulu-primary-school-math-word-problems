@@ -7,7 +7,7 @@ class TestGSM8KZuluSample(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Load the dataset once for all tests
-        cls.df = pd.read_parquet("GSM8K_Zulu_Sample.parquet")
+        cls.df = pd.read_parquet("GSM8K_Zulu.parquet")
 
     def test_cot_matches_answer_column(self):
         for idx, row in self.df.iterrows():
@@ -15,9 +15,9 @@ class TestGSM8KZuluSample(unittest.TestCase):
             expected_answer = str(row.iloc[2]).strip()
 
             # Extract answer from CoT (after last '####')
-            match = re.search(r"####\s*(\d+)\s*$", cot)
+            match = re.search(r"####\s*(-?[\d,]+)\s*$", cot)
             self.assertIsNotNone(match, f"No answer found in CoT at row {idx}")
-            cot_answer = match.group(1).strip()
+            cot_answer = match.group(1).replace(",", "").strip()
 
             # Check match
             self.assertEqual(cot_answer, expected_answer,
