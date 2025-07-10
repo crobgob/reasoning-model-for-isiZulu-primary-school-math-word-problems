@@ -38,8 +38,6 @@ def translate_to_zul(text):
         time.sleep(2)
         return translate_to_zul(text)  # Retry once recursively
 
-
-# Extracts integer answer from the CoT
 def extract_ans(cot_answer):
     split = cot_answer.split("####")
     if len(split) == 2:
@@ -47,19 +45,16 @@ def extract_ans(cot_answer):
     else:
         raise ValueError(f"Expected one answer, found {len(split) - 1}")
 
-
-# Main row processor
 def process_row(index, question, cot):
     print(f"Processing row {index}")
     try:
         q_trans = translate_to_zul(question)
         cot_trans = translate_to_zul(cot)
         ans = extract_ans(cot)
-        return {"question": q_trans, "CoT": cot_trans, "answer": ans}
+        return {"index": index, "question": q_trans, "CoT": cot_trans, "answer": ans}
     except Exception as e:
         print(f"[ERROR] Row {index} failed: {e}")
         return None
-
 
 def main():
     df = pd.read_parquet("hf://datasets/openai/gsm8k/main")
@@ -73,11 +68,12 @@ def main():
             if result:
                 results.append(result)
 
-    # Save the DataFrame
-    zulu_df = pd.DataFrame(results)
+    # Sort by original index to maintain order
+    results_sorted = sorted(results, key=lambda x: x["index"])
+    zulu_df = pd.DataFrame(results_sorted).drop(columns=["index"])
+
     zulu_df.to_parquet(PARQUET_OUTPUT, index=False)
     print(f"[DONE] Saved {len(zulu_df)} rows to {PARQUET_OUTPUT}")
-
 
 if __name__ == "__main__":
     main()
