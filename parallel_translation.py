@@ -1,4 +1,5 @@
 # Parallelised version of main.py
+# Note line 61 I have reduced dataset size to 10 for safety.
 # Program that creates a parquet dataframe for GSM8K translated to Zulu. We will have three columns: question, CoT and answer.
 # Corey Webb, BSc Hons 2025, UCT
 # 10/07/2025
@@ -57,7 +58,7 @@ def process_row(index, question, cot):
         return None
 
 def main():
-    df = pd.read_parquet("hf://datasets/openai/gsm8k/main")
+    df = pd.read_parquet("hf://datasets/openai/gsm8k/main").head(10) #For safety
     rows = [(i, row['question'], row['answer']) for i, row in df.iterrows()]
 
     results = []

@@ -41,9 +41,8 @@ def extract_ans(cot_answer):
         print("Expected one answer, found {}".format(len(split) - 1))
 
 
-
 def main():
-    df = pd.read_parquet("hf://datasets/openai/gsm8k/main")
+    df = pd.read_parquet("hf://datasets/openai/gsm8k/main").head(10)
 
     questions_zul = []
     cot_zul = []
