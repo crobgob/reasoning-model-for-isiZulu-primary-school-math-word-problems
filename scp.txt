@@ -1,0 +1,1 @@
+scp finetune_qwen_lora.py batchscript.sh GSM8K_Zulu.parquet wbbcor001@hpc.uct.ac.za:/home/wbbcor001/finetuning-qwen
