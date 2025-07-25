@@ -12,7 +12,19 @@
 #SBATCH --mail-type=ALL
 
 module load python/miniconda3-py3.12
+eval "$(conda shell.bash hook)"
 conda activate qwen-lora
+
+cd "$SLURM_SUBMIT_DIR"
+
+echo "Python path: $(which python)"
+echo "Python version:"
+python --version
+echo "Transformers version:"
+python -c "import transformers; print(transformers.__version__)"
+echo "Environment packages:"
+pip list | grep transformers
+
 
 cd "$SLURM_SUBMIT_DIR"
 srun python finetune_qwen_lora.py
