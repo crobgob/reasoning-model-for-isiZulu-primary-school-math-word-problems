@@ -2,7 +2,7 @@ import pandas as pd
 import re
 
 # Load generated predictions
-df = pd.read_csv("predictions/generated_predictions.csv")
+df = pd.read_csv("predictions/first predictions/generated_predictions.csv")
 
 correct = 0
 total = 0

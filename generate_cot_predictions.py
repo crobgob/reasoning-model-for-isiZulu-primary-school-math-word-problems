@@ -43,7 +43,7 @@ generation_args = {
 # Generate CoT for each question
 generated_cots = []
 for i, q in enumerate(questions):
-    prompt = f"Q: {q}\nA:"
+    prompt = f"Give the correct answer to this math problem. Show working out concisely and step-by-step. Q: {q}\nA:"
     output = generator(prompt, **generation_args)[0]["generated_text"]
     
     # Only keep the CoT part (after "A:")
