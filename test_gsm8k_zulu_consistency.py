@@ -7,7 +7,7 @@ class TestGSM8KZuluSample(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Load the dataset once for all tests
-        cls.df = pd.read_parquet("GSM8K_Zulu.parquet")
+        cls.df = pd.read_parquet("QZuluAEnglish.parquet")
 
     def test_cot_matches_answer_column(self):
         for idx, row in self.df.iterrows():

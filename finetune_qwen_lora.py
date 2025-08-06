@@ -21,7 +21,7 @@ print(f"Environment PATH: {os.environ.get('PATH')}")
 print(f"Conda env: {os.environ.get('CONDA_DEFAULT_ENV')}")
 
 # Load and randomise dataset from Parquet
-df = pd.read_parquet("GSM8K_Zulu.parquet").sample(frac=1.0, random_state=42).reset_index(drop=True)
+df = pd.read_parquet("QZuluAEnglish.parquet").sample(frac=1.0, random_state=42).reset_index(drop=True)
 
 # Format each row as a string: "Q: question\nA: chain-of-thought"
 formatted_texts = [f"Q: {q}\nA: {cot}" for q, cot in zip(df["question"], df["CoT"])]
@@ -137,4 +137,4 @@ trainer = Trainer(
 trainer.train()
 
 # Save final LoRA adapter weights
-trainer.model.save_pretrained("output/final_lora")
+trainer.model.save_pretrained("output/final_lora_QZAE")
