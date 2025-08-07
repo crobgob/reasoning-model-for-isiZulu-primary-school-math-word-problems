@@ -130,8 +130,8 @@ class REINFORCETrainer:
         }
     
     def format_prompt(self, question: str) -> str:
-        """Format question as prompt"""
-        return f"Sombulula le nkinga yezibalo:\n\nQ: {question}\nA: "
+        """Format same as finetuned"""
+        return f"Q: {question}\nA: "
     
     def generate_with_logprobs(self, prompt: str, num_samples: int = 1) -> List[Dict]:
         """Generate text and calculate log probabilities"""
@@ -370,10 +370,11 @@ def main():
 
     # Load LoRA adapter
     model = PeftModel.from_pretrained(model, config['model_path'])  # uses LoRA adapter
+    model.train()  # Put model in training mod
 
     
     # Enable gradient checkpointing for memory efficiency
-    model.gradient_checkpointing_enable()
+    # model.gradient_checkpointing_enable()
     
     # Initialize reward calculator and trainer
     reward_calc = OutcomeRewardCalculator()
