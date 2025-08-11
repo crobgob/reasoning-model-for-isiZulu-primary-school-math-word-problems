@@ -21,7 +21,7 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.float16,
     device_map="auto"
 )
-model = PeftModel.from_pretrained(model, "output/final_lora")
+model = PeftModel.from_pretrained(model, "RLmodel/best_model")
 model.eval()
 
 # Text generation pipeline
