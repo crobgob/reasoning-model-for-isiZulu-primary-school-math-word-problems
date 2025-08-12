@@ -54,7 +54,7 @@ def reward_func(completions, ground_truth, **kwargs):
 
 def main():
     training_args = GRPOConfig(
-        output_dir="Qwen2.5-Math-7B-GRPO",
+        output_dir="output/Qwen2.5-Math-7B-GRPO",
         per_device_train_batch_size=4,
         gradient_accumulation_steps=2,
         num_generations=8, 
