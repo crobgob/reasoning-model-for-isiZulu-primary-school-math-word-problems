@@ -49,8 +49,8 @@ model.config.use_cache = False
 
 # Configure LoRA
 peft_config = LoraConfig(
-    r=8,
-    lora_alpha=16,
+    r=32,
+    lora_alpha=64,
     lora_dropout=0.05,
     bias="none",
     task_type="CAUSAL_LM",
@@ -109,7 +109,7 @@ data_collator = default_data_collator
 training_args = TrainingArguments(
     output_dir="output",
     overwrite_output_dir=True,
-    num_train_epochs=10,
+    num_train_epochs=6,
     per_device_train_batch_size=16,  # maybe increase
     gradient_accumulation_steps=2,
     learning_rate=2e-4,
@@ -137,4 +137,4 @@ trainer = Trainer(
 trainer.train()
 
 # Save final LoRA adapter weights
-trainer.model.save_pretrained("output/final_lora_QZAE")
+trainer.model.save_pretrained("output/final_lora_rank=32")

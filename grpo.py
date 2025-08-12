@@ -1,4 +1,6 @@
-# train_grpo.py - Simple and Fixed
+#grpo for eliciting reasoning in Zulu math problems
+# This script uses the GRPOTrainer from the trl library to train a model on Zulu math problems based on the GSM8K dataset.
+#Corey Webb, UCT, BSc Hons 2025
 import re
 import pandas as pd
 from datasets import Dataset
@@ -14,9 +16,9 @@ def main():
     prompts = []
     for question in df['question']:
         prompt = (
-            "Xazulula le nkinga yezibalo, ubonise ukusebenza kwakho isinyathelo ngesinyathelo. "
-            "Sebenzisa le fomethi kuphela: <cabanga>…</cabanga><phendula>…</phendula>.\n\n"
-            f"Umbuzo: {question}"
+            "Solve this Zulu math problem, showing your work step-by-step. "
+            "Use only this format: <think>…</think><answer>…</answer>.\n\n"
+            f"Question: {question}"
         )
         prompts.append(prompt)
     
@@ -29,13 +31,14 @@ def main():
     
     # 4. Define reward function
     def format_reward_func(completions, ground_truth, **kwargs):
+        assert all(not hasattr(gt, "device") for gt in ground_truth), "ground_truth should not be tensors on GPU"
         """Reward function:
         - 2 if format is correct AND answer matches ground_truth
         - 1 if format is correct only
         - 0 otherwise
         """
         rewards = []
-        pattern = r"^<cabanga>.*?</cabanga><phendula>(.*?)</phendula>$"
+        pattern = r"^<think>.*?</think><answer>(.*?)</answer>$"
         
         # Handle different completion formats
         completion_contents = []
@@ -62,7 +65,7 @@ def main():
     # 5. Configure LoRA (Parameter-efficient training)
     peft_config = LoraConfig(
         task_type="CAUSAL_LM",
-        r=32,                    # Rank (lower = less memory)
+        r=16,                    # Rank (lower = less memory)
         lora_alpha=32,
         lora_dropout=0.1,
         target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
@@ -72,16 +75,16 @@ def main():
     # 6. Configure training settings
     training_args = GRPOConfig(
         output_dir="output/Qwen2.5-Math-7B-GRPO",
-        per_device_train_batch_size=1,        # Small batch size for memory
-        gradient_accumulation_steps=8,        # Accumulate gradients
+        per_device_train_batch_size=2,        # Small batch size for memory
+        gradient_accumulation_steps=4,        # Accumulate gradients
         bf16=True,                 # Save memory
-        max_completion_length=512,            # Limit completion length
+        max_completion_length=512,          # Limit completion length
         max_prompt_length=512,                # Limit prompt length
         num_generations=8,                    # Number of generations per prompt
         remove_unused_columns=False,          # Keep ground_truth column
         logging_steps=10,
         save_strategy="steps",
-        save_steps=500,
+        save_steps=500
     )
     
     # 7. Create trainer
@@ -95,7 +98,7 @@ def main():
     
     # 8. Start training
     print(f"Starting training with {len(dataset)} examples...")
-    trainer.train()
+    trainer.train(resume_from_checkpoint=True)
     print("Training completed!")
 
 if __name__ == "__main__":
