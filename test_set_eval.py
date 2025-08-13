@@ -1,30 +1,91 @@
-#Python script to generate Chain of Thought (CoT) for a set of questions using a pre-trained model.
+# Python script to generate Chain of Thought (CoT) for a set of questions using a pre-trained model,
+# then evaluate exact-match accuracy. Extended to also parse answers from
+# <think>...</think><answer>...</answer> format (ignoring the think part).
 
+import os
+import re
+import torch
 import pandas as pd
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from peft import PeftModel
-import torch
-import re
+
+# ----------------------------
+# Config
+# ----------------------------
+TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
+BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
+ADAPTER_PATH = "output/Qwen2.5-Math-7B-GRPO/checkpoint-2000"
+MAX_NEW_TOKENS = 512
+OUT_CSV = "generated_predictions.csv"
+EVAL_DIR = "predictions"
+EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_results.csv")
+
+# ----------------------------
+# Helpers
+# ----------------------------
+def extract_pred_answer(cot: str):
+    """
+    Extract the predicted numeric answer from the model's CoT/output.
+
+    Priority:
+      1) '#### <number>' anywhere in text (standard GSM8K-style).
+      2) <answer>...</answer> :
+           - If #### <number> appears inside, use that
+           - Else take the last integer in <answer> as fallback
+
+    Returns:
+      - pred_answer (str | None): stringified integer if found, else None
+      - from_answer_tags (bool): True if extracted via <answer> tags, False if via ####
+    """
+    # 1) Try #### pattern
+    m = re.search(r"####\s*(-?\d+)\s*$", cot)
+    if not m:
+        m = re.search(r"####\s*(-?\d+)", cot)
+    if m:
+        return m.group(1).strip(), False
+
+    # 2) Try <answer>...</answer>
+    alt = re.search(r"<answer>\s*(.*?)\s*</answer>", cot, re.DOTALL | re.IGNORECASE)
+    if alt:
+        answer_text = alt.group(1).strip()
+
+        # Prefer #### inside answer tag
+        m2 = re.search(r"####\s*(-?\d+)\s*$", answer_text)
+        if not m2:
+            m2 = re.search(r"####\s*(-?\d+)", answer_text)
+        if m2:
+            return m2.group(1).strip(), True
+
+        # Otherwise, take last integer found
+        nums = re.findall(r"-?\d+", answer_text)
+        if nums:
+            return nums[-1], True
+
+    # Nothing found
+    return None, False
 
 
+# ----------------------------
 # Load test dataset
-df = pd.read_csv("hf://datasets/masakhane/afrimgsm/data/zul/test.tsv", sep='\t')
+# ----------------------------
+df = pd.read_csv(TEST_PATH, sep="\t")
 questions = df["question"].tolist()
 
-# Load base model and tokenizer
-base_model = "Qwen/Qwen2.5-Math-7B"
-tokenizer = AutoTokenizer.from_pretrained(base_model, use_fast=True)
-
-# Load base + LoRA adapter
+# ----------------------------
+# Load model & tokenizer
+# ----------------------------
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
 model = AutoModelForCausalLM.from_pretrained(
-    base_model,
+    BASE_MODEL,
     torch_dtype=torch.float16,
-    device_map="auto"
+    device_map="auto",
 )
-model = PeftModel.from_pretrained(model, "RLmodel/best_model")
+model = PeftModel.from_pretrained(model, ADAPTER_PATH)
 model.eval()
 
-# Text generation pipeline
+# ----------------------------
+# Generation pipeline
+# ----------------------------
 generator = pipeline(
     "text-generation",
     model=model,
@@ -33,73 +94,72 @@ generator = pipeline(
     torch_dtype=torch.float16,
 )
 
-# Inference config
 generation_args = {
-    "max_new_tokens": 512,
+    "max_new_tokens": MAX_NEW_TOKENS,
     "do_sample": False,
-    "temperature": 0.7,
     "pad_token_id": tokenizer.eos_token_id,
 }
 
+# ----------------------------
 # Generate CoT for each question
+# ----------------------------
 generated_cots = []
 for i, q in enumerate(questions):
     prompt = f"Q: {q}\nA:"
     output = generator(prompt, **generation_args)[0]["generated_text"]
-    
-    # Only keep the CoT part (after "A:")
+
+    # Keep only the text after "A:"
     match = re.search(r"Q:.*?\nA:(.*)", output, re.DOTALL)
     cot = match.group(1).strip() if match else ""
-    
+
     print(f"\n📍 Q{i+1}: {q}\n🧠 Generated CoT: {cot}")
     generated_cots.append(cot)
 
-# Save results
+# ----------------------------
+# Save generations
+# ----------------------------
 df["generated_cot"] = generated_cots
-df.to_csv("generated_predictions.csv", index=False)
+df.to_csv(OUT_CSV, index=False)
 
-# Load generated predictions
-df = pd.read_csv("generated_predictions.csv")
+# ----------------------------
+# Evaluate predictions
+# ----------------------------
+df = pd.read_csv(OUT_CSV)
 
 correct = 0
 total = 0
 bad_format = 0
 results = []
 
-for i, row in df.iterrows():
-    gold_answer = str(row['answer_number']).strip()
-    cot = str(row['generated_cot'])
+for i, row in enumerate(df.itertuples(index=False)):
+    gold_answer = str(getattr(row, "answer_number")).strip()
+    cot = str(getattr(row, "generated_cot"))
 
-    # Extract the final number after the last ####
-    match = re.search(r"####\s*(-?\d+)\s*$", cot)
+    pred_answer, used_alt = extract_pred_answer(cot)
 
-    if match:
-        pred_answer = match.group(1).strip()
-    else:
-        pred_answer = None
+    if pred_answer is None:
         bad_format += 1
 
-    is_correct = pred_answer == gold_answer
+    is_correct = (pred_answer == gold_answer)
     if is_correct:
         correct += 1
     total += 1
 
     results.append({
-        "question": row['question'],
+        "question": getattr(row, "question"),
         "gold_answer": gold_answer,
         "pred_answer": pred_answer,
-        "correct": is_correct
+        "correct": is_correct,
+        "extracted_from_tags": used_alt,
     })
 
-# Summary
-accuracy = correct / total * 100
+accuracy = (correct / total * 100.0) if total else 0.0
+
 print(f"\nTotal: {total}")
 print(f"Correct: {correct}")
 print(f"Incorrect: {total - correct}")
-print(f"CoT with no answer found (no ####): {bad_format}")
+print(f"CoT with no answer found (no #### and no <answer>): {bad_format}")
 print(f"\nAccuracy: {accuracy:.2f}%")
 
-# Optional: save per-question evaluation
-eval_df = pd.DataFrame(results)
-eval_df.to_csv("predictions/evaluation_results.csv", index=False)
-print("\n📁 Saved detailed results to predictions/evaluation_results.csv")
+# ----------------------------
+# Persist

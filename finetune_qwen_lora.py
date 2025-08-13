@@ -74,7 +74,7 @@ class QADataset(Dataset):
             text, 
             truncation=True, 
             max_length=self.max_length, 
-            padding="max_length",  # Pad to max_length
+            padding= "max_length",
             return_tensors="pt"
         )
         input_ids = tokens["input_ids"].squeeze()
@@ -109,7 +109,7 @@ data_collator = default_data_collator
 training_args = TrainingArguments(
     output_dir="output",
     overwrite_output_dir=True,
-    num_train_epochs=6,
+    num_train_epochs=3,
     per_device_train_batch_size=16,  # maybe increase
     gradient_accumulation_steps=2,
     learning_rate=2e-4,
@@ -119,7 +119,7 @@ training_args = TrainingArguments(
     save_strategy="epoch",
     save_total_limit=1,
     load_best_model_at_end=True,
-    metric_for_best_model="loss",
+    metric_for_best_model="eval_loss",
     greater_is_better=False,
     report_to="none",
     gradient_checkpointing=True,
@@ -137,4 +137,4 @@ trainer = Trainer(
 trainer.train()
 
 # Save final LoRA adapter weights
-trainer.model.save_pretrained("output/final_lora_rank=32")
+trainer.model.save_pretrained("output/QZAE")
