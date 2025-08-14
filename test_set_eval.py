@@ -44,23 +44,6 @@ def extract_pred_answer(cot: str):
     if m:
         return m.group(1).strip(), False
 
-    # 2) Try <answer>...</answer>
-    alt = re.search(r"<answer>\s*(.*?)\s*</answer>", cot, re.DOTALL | re.IGNORECASE)
-    if alt:
-        answer_text = alt.group(1).strip()
-
-        # Prefer #### inside answer tag
-        m2 = re.search(r"####\s*(-?\d+)\s*$", answer_text)
-        if not m2:
-            m2 = re.search(r"####\s*(-?\d+)", answer_text)
-        if m2:
-            return m2.group(1).strip(), True
-
-        # Otherwise, take last integer found
-        nums = re.findall(r"-?\d+", answer_text)
-        if nums:
-            return nums[-1], True
-
     # Nothing found
     return None, False
 

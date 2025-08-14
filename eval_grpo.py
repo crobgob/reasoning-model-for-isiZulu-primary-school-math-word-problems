@@ -92,14 +92,16 @@ generation_args = {
 # ----------------------------
 generated_cots = []
 for i, q in enumerate(questions):
-    prompt = "Solve this Zulu math problem, showing your work step-by-step. "
-    + "Use only this format: <think>…</think><answer>…</answer>.\n\n"
-    + f"Question: {q}"
+    prompt = (
+        "Solve this Zulu math problem, showing your work step-by-step. "
+        "Use only this format: <think>…</think><answer>…</answer>.\n\n"
+        f"Question: {q}"
+        )
     output = generator(prompt, **generation_args)[0]["generated_text"]
 
     # Keep only the text after "A:"
-    match = re.search(r"Q:.*?\nA:(.*)", output, re.DOTALL)
-    cot = match.group(1).strip() if match else ""
+    match = re.search(r"<think>.*?</think>(.*)", output, re.DOTALL | re.IGNORECASE)
+    cot = match.group(0).strip() if match else ""
 
     print(f"\n📍 Q{i+1}: {q}\n🧠 Generated CoT: {cot}")
     generated_cots.append(cot)
