@@ -13,13 +13,12 @@ from peft import PeftModel
 # Config
 # ----------------------------
 TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
-BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
-ADAPTER_PATH = "output/QZAE"
-GRPO_ADAPTER = "output/QZAE_GRPO/checkpoint-4000"
+BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAE_Finetune"
+TOKENIZER_SRC = "Qwen/Qwen2.5-Math-7B"  # base tokenizer
 MAX_NEW_TOKENS = 512
-OUT_CSV = "generated_predictions_grpo.csv"
+OUT_CSV = "generated_predictions_QZAE_merged.csv"
 EVAL_DIR = "predictions"
-EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_QZAE_GRPO.csv")
+EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_QZAE_merged.csv")
 
 # ----------------------------
 # Helpers
@@ -29,14 +28,7 @@ def extract_pred_answer(cot: str):
     Extract the predicted numeric answer from the model's CoT/output.
 
     Priority:
-      1) '#### <number>' anywhere in text (standard GSM8K-style).
-      2) <answer>...</answer> :
-           - If #### <number> appears inside, use that
-           - Else take the last integer in <answer> as fallback
-
-    Returns:
-      - pred_answer (str | None): stringified integer if found, else None
-      - from_answer_tags (bool): True if extracted via <answer> tags, False if via ####
+      1) '#### <number>'
     """
     # 1) Try #### pattern
     m = re.search(r"####\s*(-?\d+)\s*$", cot)
@@ -44,23 +36,6 @@ def extract_pred_answer(cot: str):
         m = re.search(r"####\s*(-?\d+)", cot)
     if m:
         return m.group(1).strip(), False
-
-    # 2) Try <answer>...</answer>
-    alt = re.search(r"<answer>\s*(.*?)\s*</answer>", cot, re.DOTALL | re.IGNORECASE)
-    if alt:
-        answer_text = alt.group(1).strip()
-
-        # Prefer #### inside answer tag
-        m2 = re.search(r"####\s*(-?\d+)\s*$", answer_text)
-        if not m2:
-            m2 = re.search(r"####\s*(-?\d+)", answer_text)
-        if m2:
-            return m2.group(1).strip(), True
-
-        # Otherwise, take last integer found
-        nums = re.findall(r"-?\d+", answer_text)
-        if nums:
-            return nums[-1], True
 
     # Nothing found
     return None, False
@@ -75,15 +50,13 @@ questions = df["question"].tolist()
 # ----------------------------
 # Load model & tokenizer
 # ----------------------------
-tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
+tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_SRC, use_fast=True)
 model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     torch_dtype=torch.float16,
     device_map="auto",
 )
-model = PeftModel.from_pretrained(model, ADAPTER_PATH)
-model.load_adapter(GRPO_ADAPTER, adapter_name="grpo")
-model.set_adapter("grpo")  # ensure we use the GRPO head on top of SFT deltas
+
 model.eval()
 
 # ----------------------------
@@ -115,7 +88,7 @@ for i, q in enumerate(questions):
     match = re.search(r"Q:.*?\nA:(.*)", output, re.DOTALL)
     cot = match.group(1).strip() if match else ""
 
-    print(f"\n📍 Q{i+1}: {q}\n🧠 Generated CoT: {cot}")
+    print(f"\nQ{i+1}: {q}\n Generated CoT: {cot}")
     generated_cots.append(cot)
 
 # ----------------------------

@@ -6,7 +6,7 @@ import pandas as pd
 from datasets import Dataset
 from trl import GRPOConfig, GRPOTrainer
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 import wandb
 
@@ -98,9 +98,9 @@ training_args = GRPOConfig(
 )
 
 
-# Load base model and tokenizer
-base_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-Math-7B")
-model = PeftModel.from_pretrained(base_model, "output/QZAE")
+# Load merged finetuned model
+model = AutoModelForCausalLM.from_pretrained("/scratch/wbbcor001/Qwen_QZAE_Finetune")
+# tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Math-7B", use_fast=True)
 
 # 7. Create trainer
 trainer = GRPOTrainer(
