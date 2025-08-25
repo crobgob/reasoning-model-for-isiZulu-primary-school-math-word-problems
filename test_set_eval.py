@@ -14,11 +14,12 @@ from peft import PeftModel
 # ----------------------------
 TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
 BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
-ADAPTER_PATH = "output/Qwen2.5-Math-7B-GRPO/checkpoint-2000"
+ADAPTER_PATH = "output/QZAE"
+GRPO_ADAPTER = "output/QZAE_GRPO/checkpoint-4000"
 MAX_NEW_TOKENS = 512
-OUT_CSV = "generated_predictions.csv"
+OUT_CSV = "generated_predictions_grpo.csv"
 EVAL_DIR = "predictions"
-EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_results.csv")
+EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_QZAE_GRPO.csv")
 
 # ----------------------------
 # Helpers
@@ -44,6 +45,23 @@ def extract_pred_answer(cot: str):
     if m:
         return m.group(1).strip(), False
 
+    # 2) Try <answer>...</answer>
+    alt = re.search(r"<answer>\s*(.*?)\s*</answer>", cot, re.DOTALL | re.IGNORECASE)
+    if alt:
+        answer_text = alt.group(1).strip()
+
+        # Prefer #### inside answer tag
+        m2 = re.search(r"####\s*(-?\d+)\s*$", answer_text)
+        if not m2:
+            m2 = re.search(r"####\s*(-?\d+)", answer_text)
+        if m2:
+            return m2.group(1).strip(), True
+
+        # Otherwise, take last integer found
+        nums = re.findall(r"-?\d+", answer_text)
+        if nums:
+            return nums[-1], True
+
     # Nothing found
     return None, False
 
@@ -64,6 +82,8 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map="auto",
 )
 model = PeftModel.from_pretrained(model, ADAPTER_PATH)
+model.load_adapter(GRPO_ADAPTER, adapter_name="grpo")
+model.set_adapter("grpo")  # ensure we use the GRPO head on top of SFT deltas
 model.eval()
 
 # ----------------------------
@@ -88,7 +108,7 @@ generation_args = {
 # ----------------------------
 generated_cots = []
 for i, q in enumerate(questions):
-    prompt = f"Q: {q}\nA:"
+    prompt = f"Q: {q}\nA: "
     output = generator(prompt, **generation_args)[0]["generated_text"]
 
     # Keep only the text after "A:"

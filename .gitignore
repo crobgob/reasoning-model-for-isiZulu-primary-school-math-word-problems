@@ -2,3 +2,5 @@
 /2 epoch train
 /QZAE
 /output
+/GRPO
+/Finetune QZAE

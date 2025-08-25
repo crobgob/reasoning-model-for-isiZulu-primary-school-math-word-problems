@@ -1,30 +1,20 @@
 #!/bin/bash
-#SBATCH --job-name=RLQwen
+#SBATCH --job-name=grpo
 #SBATCH --account=l40sfree
 #SBATCH --partition=l40s
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:l40s:1
+#SBATCH --gres=gpu:l40s:2
 #SBATCH --cpus-per-task=4
 #SBATCH --time=48:00:00
 #SBATCH --output=RLQwen-%j.out
 #SBATCH --mail-user=wbbcor001@myuct.ac.za
 #SBATCH --mail-type=ALL
 
+cd "$SLURM_SUBMIT_DIR"
 module load python/miniconda3-py3.12
 eval "$(conda shell.bash hook)"
 conda activate qwen-lora
+source grpo-env/bin/activate
 
-cd "$SLURM_SUBMIT_DIR"
-
-echo "Python path: $(which python)"
-echo "Python version:"
-python --version
-echo "Transformers version:"
-python -c "import transformers; print(transformers.__version__)"
-echo "Environment packages:"
-pip list | grep transformers
-
-
-cd "$SLURM_SUBMIT_DIR"
-srun python RLscript.py
+srun accelerate launch --config_file deepspeed_zero3.yaml finetune_and_grpo.py

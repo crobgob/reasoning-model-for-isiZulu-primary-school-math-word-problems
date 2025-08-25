@@ -17,9 +17,9 @@ wandb.init(project="grpo-AfriMGSM", name="qwen-grpo")
 # 4. Define reward function
 def format_reward_func(completions, ground_truth, **kwargs):
         """Reward function:
-        - 2 if format is correct AND answer matches ground_truth
-        - 1 if format is correct only
-        - 0 otherwise
+        - 1 if format is correct AND answer matches ground_truth
+        - -0.5 if format is correct only
+        - -1 otherwise
         """
         rewards = []
     
@@ -53,7 +53,7 @@ def format_reward_func(completions, ground_truth, **kwargs):
         return rewards
 
 # 1. Load the Zulu GSM8K dataset
-parquet_file = 'GSM8K_Zulu.parquet'
+parquet_file = 'QZuluAEnglish.parquet'
 df = pd.read_parquet(parquet_file)
 
 # 2. Create prompts for each question
@@ -82,7 +82,7 @@ peft_config = LoraConfig(
 
 # 6. Configure training settings
 training_args = GRPOConfig(
-    output_dir="output/Qwen2.5-Math-7B-GRPO",
+    output_dir="output/QZAE_GRPO",
     per_device_train_batch_size=2,        # Small batch size due to memory constraints
     gradient_accumulation_steps=4,
     bf16=True,                 # Saves VRAM
@@ -93,7 +93,8 @@ training_args = GRPOConfig(
     logging_steps=10,
     save_strategy="steps",
     save_steps=500,
-    report_to="wandb"
+    report_to="wandb",
+    save_total_limit=3,  # Keep only the last 3 checkpoints
 )
 
 
@@ -112,5 +113,5 @@ trainer = GRPOTrainer(
 
 # 8. Start training
 print(f"Starting training with {len(dataset)} examples...")
-trainer.train(resume_from_checkpoint=True)
+trainer.train(resume_from_checkpoint=False)
 print("Training completed!")
