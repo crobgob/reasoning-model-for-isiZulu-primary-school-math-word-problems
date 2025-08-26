@@ -13,8 +13,8 @@ from peft import PeftModel
 # Config
 # ----------------------------
 TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
-BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
-ADAPTER_PATH = "output/Qwen2.5-Math-7B-GRPO/checkpoint-2000"
+BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAE_Finetune"
+ADAPTER_PATH = "output/Qwen2.5-Math-7B-GRPO/checkpoint-3500"
 MAX_NEW_TOKENS = 512
 OUT_CSV = "generated_predictions_grpo.csv"
 EVAL_DIR = "predictions"
@@ -26,28 +26,34 @@ EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_results_grpo.csv")
 def extract_pred_answer(cot: str):
     """
     Extract the predicted numeric answer from the model's CoT/output.
-
     Priority:
-      1) '#### <number>' anywhere in text (standard GSM8K-style).
-      2) <answer>...</answer> :
-           - If #### <number> appears inside, use that
-           - Else take the last integer in <answer> as fallback
-
+      1) '#### {answer}' anywhere in text (modified format).
     Returns:
-      - pred_answer (str | None): stringified integer if found, else None
+      - pred_answer (str | None): stringified number if found, else None
       - from_answer_tags (bool): True if extracted via <answer> tags, False if via ####
     """
-
-    # 2) Try <answer>...</answer>
-    alt = re.search(r"<answer>\s*(.*?)\s*</answer>", cot, re.DOTALL | re.IGNORECASE)
-    if alt:
-        answer_text = alt.group(1).strip()
-
-        # Otherwise, take last integer found
-        nums = re.findall(r"-?\d+", answer_text)
-        if nums:
-            return nums[-1], True
-
+    # 1) Try #### {answer} format first
+    # Look for #### followed by any content in curly braces
+    pattern = r"####\s*\{\s*([^}]*?)\s*\}"
+    match = re.search(pattern, cot, re.DOTALL | re.IGNORECASE)
+    
+    if match:
+        answer_content = match.group(1).strip()
+        # Extract number from the content, handling negatives, decimals, and commas
+        # Remove commas first, then look for number pattern
+        cleaned = answer_content.replace(',', '')
+        # Pattern for negative numbers with optional decimal points
+        num_match = re.search(r"-?\d+(?:\.\d+)?", cleaned)
+        if num_match:
+            number = num_match.group(0)
+            # Convert to integer if it's a whole number, otherwise keep as string
+            if '.' in number and number.endswith('.0'):
+                return str(int(float(number))), False
+            elif '.' not in number:
+                return number, False
+            else:
+                # Return as string to preserve decimal
+                return number, False
     # Nothing found
     return None, False
 
@@ -92,18 +98,14 @@ generation_args = {
 # ----------------------------
 generated_cots = []
 for i, q in enumerate(questions):
-    prompt = (
-        "Solve this Zulu math problem, showing your work step-by-step. "
-        "Use only this format: <think>…</think><answer>…</answer>.\n\n"
-        f"Question: {q}"
-        )
+    prompt = f"Q: {q}\nA: "
     output = generator(prompt, **generation_args)[0]["generated_text"]
-
+    
     # Keep only the text after "A:"
-    match = re.search(r"<think>.*?</think>(.*)", output, re.DOTALL | re.IGNORECASE)
-    cot = match.group(0).strip() if match else ""
-
-    print(f"\n📍 Q{i+1}: {q}\n🧠 Generated CoT: {cot}")
+    match = re.search(r"A:\s*(.*)", output, re.DOTALL | re.IGNORECASE)
+    cot = match.group(1).strip() if match else ""
+    
+    print(f"\nQ{i+1}: {q}\nGenerated CoT: {cot}")
     generated_cots.append(cot)
 
 # ----------------------------
