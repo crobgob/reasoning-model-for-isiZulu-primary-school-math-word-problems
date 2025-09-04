@@ -1,6 +1,4 @@
-# Python script to generate Chain of Thought (CoT) for a set of questions using a pre-trained model,
-# then evaluate exact-match accuracy. Extended to also parse answers from
-# <think>...</think><answer>...</answer> format (ignoring the think part).
+# Python script to generate Chain of Thought (CoT) for a set of questions using a pre-trained model.
 
 import os
 import re
@@ -14,43 +12,30 @@ from peft import PeftModel
 # ----------------------------
 NAME = "QZAZ"
 TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
-BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
-ADAPTER_PATH = "output/QZAE_GRPO_BASE/pretrained"
+BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAZ_Finetune"
+ADAPTER_PATH = "output/QZAZ_GRPO/final_model"
 MAX_NEW_TOKENS = 512
 OUT_CSV = f"generated_predictions_{NAME}.csv"
 EVAL_DIR = "predictions"
 EVAL_PATH = os.path.join(EVAL_DIR, f"evaluation_{NAME}.csv")
 
-# ----------------------------
-# Helpers
-# ----------------------------
-def extract_pred_answer(cot: str):
-    """
-    Extract the predicted numeric answer from the model's CoT/output.
 
-    Priority:
-      1) '#### <number>'
-    """
+#Answer extraction - looks for #### <number> pattern
+def extract_pred_answer(cot: str):
     # 1) Try #### pattern
     m = re.search(r"####\s*(-?\d+)\s*$", cot)
     if not m:
         m = re.search(r"####\s*(-?\d+)", cot)
     if m:
         return m.group(1).strip(), False
-
-    # Nothing found
-    return None, False
+    return None, False # No answer found
 
 
-# ----------------------------
-# Load test dataset
-# ----------------------------
+#Test dataset
 df = pd.read_csv(TEST_PATH, sep="\t")
 questions = df["question"].tolist()
 
-# ----------------------------
-# Load model & tokenizer
-# ----------------------------
+#Loading model + adapter path and tokeniser
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
 base_model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
@@ -59,9 +44,7 @@ base_model = AutoModelForCausalLM.from_pretrained(
 )
 model = PeftModel.from_pretrained(base_model, ADAPTER_PATH).eval()
 
-# ----------------------------
-# Generation pipeline
-# ----------------------------
+# Generation pipeline - is this necessary?
 generator = pipeline(
     "text-generation",
     model=model,
@@ -76,9 +59,8 @@ generation_args = {
     "pad_token_id": tokenizer.eos_token_id,
 }
 
-# ----------------------------
-# Generate CoT for each question
-# ----------------------------
+
+# Prompt for CoT on the 250 test questions
 generated_cots = []
 for i, q in enumerate(questions):
     prompt = f"Q: {q}\n A: "
@@ -104,9 +86,8 @@ for i, q in enumerate(questions):
 df["generated_cot"] = generated_cots
 df.to_csv(OUT_CSV, index=False)
 
-# ----------------------------
-# Evaluate predictions
-# ----------------------------
+
+# Evaluate
 df = pd.read_csv(OUT_CSV)
 
 correct = 0
@@ -143,6 +124,3 @@ print(f"Correct: {correct}")
 print(f"Incorrect: {total - correct}")
 print(f"CoT with no answer found (no ####): {bad_format}")
 print(f"\nAccuracy: {accuracy:.2f}%")
-
-# ----------------------------
-# Persist

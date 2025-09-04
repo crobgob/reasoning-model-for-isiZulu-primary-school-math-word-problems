@@ -1,5 +1,5 @@
 #grpo for eliciting reasoning in Zulu math problems
-# This script uses the GRPOTrainer from the trl library to train a model on Zulu math problems based on the GSM8K dataset.
+# This script uses the GRPOTrainer from the trl library to train a model using a dataset of Zulu math problems.
 #Corey Webb, UCT, BSc Hons 2025
 import re
 import pandas as pd
