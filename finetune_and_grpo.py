@@ -5,13 +5,18 @@ import re
 import pandas as pd
 from datasets import Dataset
 from trl import GRPOConfig, GRPOTrainer
-from peft import LoraConfig
+from peft import LoraConfig, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 import wandb
 
+dataset = "GSM8K_Zulu.parquet"
+job_name = "QZAZ_GRPO"
+base_path = "/scratch/wbbcor001/Qwen_QZAZ_Finetune"
+
+
 #wandb logging
-wandb.init(project="grpo-AfriMGSM", name="qwen-grpo")
+wandb.init(project=f"{job_name}", name=f"{job_name}")
 
 
 # 4. Define reward function
@@ -23,7 +28,6 @@ def format_reward_func(completions, ground_truth, **kwargs):
         """
         rewards = []
     
-        # Handle different completion formats
         completion_contents = []
         for completion in completions:
             if isinstance(completion, list) and len(completion) > 0:
@@ -37,7 +41,6 @@ def format_reward_func(completions, ground_truth, **kwargs):
         ground_truth_tiled = [gt for gt in ground_truth for _ in range(num_generations)]
 
         for content, gt in zip(completion_contents, ground_truth_tiled):
-            # Try #### pattern - first look for #### at end, then anywhere
             match = re.search(r"####\s*(-?\d+)\s*$", content)
             if not match:
                 match = re.search(r"####\s*(-?\d+)", content)
@@ -52,17 +55,15 @@ def format_reward_func(completions, ground_truth, **kwargs):
                 rewards.append(-1)      # Wrong format
         return rewards
 
-# 1. Load the Zulu GSM8K dataset
-parquet_file = 'QZuluAEnglish.parquet'
+parquet_file = dataset
 df = pd.read_parquet(parquet_file)
-
-# 2. Create prompts for each question
+# Prompt format
 prompts = []
 for question in df['question']:
     prompt = f"Q: {question}\nA: "
     prompts.append(prompt)
 
-# 3. Create dataset with prompts and ground truth
+# Create dataset with prompts and ground truth
 ground_truth = df['answer'].astype(str).tolist()
 dataset = Dataset.from_dict({
     "prompt": prompts,
@@ -70,26 +71,26 @@ dataset = Dataset.from_dict({
 })
 
 
-# 5. Configure LoRA (Parameter-efficient training)
-peft_config = LoraConfig(
+#  LoRA (Parameter-efficient training)
+lora_config = LoraConfig(
     task_type="CAUSAL_LM",
-    r=16,                    # Rank (lower = less memory)
+    r=16,                    # (lower = less memory)
     lora_alpha=32,
     lora_dropout=0.1,
     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
     bias="none",
 )
 
-# 6. Configure training settings
+#  training settings
 training_args = GRPOConfig(
-    output_dir="output/QZAE_GRPO",
+    output_dir=f"output/{job_name}",
     per_device_train_batch_size=2,        # Small batch size due to memory constraints
     gradient_accumulation_steps=4,
     bf16=True,                 # Saves VRAM
     max_completion_length=512,         
     max_prompt_length=512,  
-    num_generations=8,                    # Number of generations per prompt
-    remove_unused_columns=False,          # Keep ground_truth column
+    num_generations=8,  # Number of generations per prompt
+    remove_unused_columns=False,      # Keep ground_truth column
     logging_steps=10,
     save_strategy="steps",
     save_steps=500,
@@ -98,20 +99,23 @@ training_args = GRPOConfig(
 )
 
 
-# Load merged finetuned model
-model = AutoModelForCausalLM.from_pretrained("/scratch/wbbcor001/Qwen_QZAE_Finetune")
-# tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Math-7B", use_fast=True)
+model = AutoModelForCausalLM.from_pretrained(base_path)
+model = get_peft_model(model, lora_config)
+print(model.print_trainable_parameters())
 
-# 7. Create trainer
+# GRPO trainer
 trainer = GRPOTrainer(
-    model=model,      #Qwen/Qwen2-0.5B-Instruct; "Qwen/Qwen2.5-Math-7B"
-    peft_config=peft_config,              # Add LoRA configuration
-    reward_funcs=[format_reward_func],    # Fixed: use list and correct function name
+    model=model,  
+    reward_funcs=[format_reward_func], 
     args=training_args,
     train_dataset=dataset,
 )
 
-# 8. Start training
+# training
 print(f"Starting training with {len(dataset)} examples...")
-trainer.train(resume_from_checkpoint=False)
+try:
+    trainer.train(resume_from_checkpoint=True)
+except:
+    trainer.train(resume_from_checkpoint=False)
+trainer.model.save_pretrained(f"output/{job_name}/final_model")
 print("Training completed!")

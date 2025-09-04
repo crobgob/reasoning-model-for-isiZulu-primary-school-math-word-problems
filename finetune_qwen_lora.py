@@ -10,24 +10,26 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model
 import os
+import wandb
 
-print("🔍 Starting script...")
-print(f"CUDA available: {torch.cuda.is_available()}")
-print(f"CUDA device count: {torch.cuda.device_count()}")
-print(f"GPU Name: {torch.cuda.get_device_name(0)}")
-print(f"Allocated GPU memory: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
-print(f"Reserved GPU memory: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
-print(f"Environment PATH: {os.environ.get('PATH')}")
-print(f"Conda env: {os.environ.get('CONDA_DEFAULT_ENV')}")
+#GO OVER ALL OF THESE BEFORE TRAINING
+BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
+dataset = "GSM8K_Zulu.parquet"
+job_name = "finetune_QZAZ"
+dataset = "GSM8K_Zulu.parquet"
+
+
+#wandb logging
+wandb.init(project=f"{job_name}", name=f"{job_name}")
 
 # Load and randomise dataset from Parquet
-df = pd.read_parquet("QZuluAEnglish.parquet").sample(frac=1.0, random_state=42).reset_index(drop=True)
+df = pd.read_parquet(dataset).sample(frac=1.0, random_state=42).reset_index(drop=True)
 
 # Format each row as a string: "Q: question\nA: chain-of-thought"
 formatted_texts = [f"Q: {q}\nA: {cot}" for q, cot in zip(df["question"], df["CoT"])]
 
 # Load tokenizer and model
-model_name = "Qwen/Qwen2.5-Math-7B"
+model_name = BASE_MODEL
 tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
@@ -109,7 +111,7 @@ data_collator = default_data_collator
 training_args = TrainingArguments(
     output_dir="output",
     overwrite_output_dir=True,
-    num_train_epochs=3,
+    num_train_epochs=10,
     per_device_train_batch_size=16,  # maybe increase
     gradient_accumulation_steps=2,
     learning_rate=2e-4,
@@ -121,7 +123,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="eval_loss",
     greater_is_better=False,
-    report_to="none",
+    report_to="wandb",
     gradient_checkpointing=True,
 )
 
@@ -137,4 +139,4 @@ trainer = Trainer(
 trainer.train()
 
 # Save final LoRA adapter weights
-trainer.model.save_pretrained("output/QZAE")
+trainer.model.save_pretrained(f"output/{job_name}")

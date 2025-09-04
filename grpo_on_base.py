@@ -118,5 +118,5 @@ trainer = GRPOTrainer(
 
 # 8. Start training
 print(f"Starting training with {len(dataset)} examples...")
-trainer.train(resume_from_checkpoint=False)
+trainer.train(resume_from_checkpoint=True)
 print("Training completed!")

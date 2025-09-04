@@ -4,19 +4,31 @@ from peft import PeftModel
 import torch
 import re
 from collections import Counter
+import os
+
+# MAKE SURE PROMPT IS IN SAME FORMAT AS TRAINING - line 63
+NAME = "QZAE_GRPO"
+BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAE_Finetune"
+ADAPTER_PATH = "output/QZAE_GRPO/final_model"
+MAX_NEW_TOKENS = 512
+OUT_CSV = f"predictions_pass8_maj8_{NAME}.csv"
+EVAL_DIR = "metrics"
+TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
+
 
 # Load test dataset
-df = pd.read_csv("hf://datasets/masakhane/afrimgsm/data/zul/test.tsv", sep="\t")
+df = pd.read_csv(TEST_PATH, sep="\t")
 questions = df["question"].tolist()
 answers = df["answer_number"].astype(str).tolist()
 
 # Load model and tokenizer
-base_model = "Qwen/Qwen2.5-Math-7B"
+base_model = BASE_MODEL
 tokenizer = AutoTokenizer.from_pretrained(base_model, use_fast=True)
 model = AutoModelForCausalLM.from_pretrained(
     base_model, torch_dtype=torch.float16, device_map="auto"
 )
-model = PeftModel.from_pretrained(model, "output/final_lora")
+if ADAPTER_PATH:
+    model = PeftModel.from_pretrained(model, ADAPTER_PATH, is_trainable=False).eval()
 model.eval()
 
 # Text generation pipeline
@@ -30,15 +42,21 @@ generator = pipeline(
 
 # Inference config (non-zero temperature for sampling)
 generation_args = {
-    "max_new_tokens": 512,
+    "max_new_tokens": MAX_NEW_TOKENS,
     "do_sample": True,
-    "temperature": 0.7,
+    "temperature": 0.7, # Based on Wang, et al 2023
     "pad_token_id": tokenizer.eos_token_id,
     "num_return_sequences": 8,
 }
 
 # Extract final answer from CoT (last number in the response)
 def extract_final_answer(text):
+    # First try #### pattern (matches training format)
+    match = re.search(r"####\s*(-?\d+)\s*$", text)
+    if not match:
+        match = re.search(r"####\s*(-?\d+)", text)
+        
+    # Fallback to any number if #### not found
     numbers = re.findall(r"-?\d+(?:\.\d+)?", text)
     return numbers[-1] if numbers else ""
 
@@ -48,7 +66,7 @@ maj_at_8 = 0
 all_preds = []
 
 for i, (q, gt) in enumerate(zip(questions, answers)):
-    prompt = f"\nQ: {q}\nA:"
+    prompt = f"Q: {q}\nA: " #Make sure to keep format that is the same as in training
     outputs = generator(prompt, **generation_args)
 
     cots = []
@@ -83,4 +101,6 @@ print(f"\n pass@8: {pass_at_8}/{total} = {pass_at_8/total:.3f}")
 print(f"maj@8: {maj_at_8}/{total} = {maj_at_8/total:.3f}")
 
 # Save results
-pd.DataFrame(all_preds).to_json("cot_predictions_pass8_maj8.json", orient="records", indent=2)
+os.makedirs(EVAL_DIR, exist_ok=True)
+pd.DataFrame(all_preds).to_csv(os.path.join(EVAL_DIR, OUT_CSV), index=False) 
+

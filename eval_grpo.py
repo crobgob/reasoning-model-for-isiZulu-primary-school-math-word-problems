@@ -14,11 +14,10 @@ from peft import PeftModel
 # ----------------------------
 TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
 BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAE_Finetune"
-ADAPTER_PATH = "output/Qwen2.5-Math-7B-GRPO/checkpoint-3500"
+ADAPTER_PATH = "output/QZAE_GRPO/checkpoint-12500"
 MAX_NEW_TOKENS = 512
 OUT_CSV = "generated_predictions_grpo.csv"
-EVAL_DIR = "predictions"
-EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_results_grpo.csv")
+EVAL_PATH = "predictions"
 
 # ----------------------------
 # Helpers
@@ -34,7 +33,7 @@ def extract_pred_answer(cot: str):
     """
     # 1) Try #### {answer} format first
     # Look for #### followed by any content in curly braces
-    pattern = r"####\s*\{\s*([^}]*?)\s*\}"
+    pattern = r"####\s*(-?\d+)\s*$"
     match = re.search(pattern, cot, re.DOTALL | re.IGNORECASE)
     
     if match:
@@ -151,7 +150,7 @@ accuracy = (correct / total * 100.0) if total else 0.0
 print(f"\nTotal: {total}")
 print(f"Correct: {correct}")
 print(f"Incorrect: {total - correct}")
-print(f"CoT with no answer found (no #### and no <answer>): {bad_format}")
+print(f"CoT with no answer found (no ####): {bad_format}")
 print(f"\nAccuracy: {accuracy:.2f}%")
 
 # ----------------------------

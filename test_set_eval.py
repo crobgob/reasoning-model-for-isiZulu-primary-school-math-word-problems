@@ -12,13 +12,14 @@ from peft import PeftModel
 # ----------------------------
 # Config
 # ----------------------------
+NAME = "QZAZ"
 TEST_PATH = "hf://datasets/masakhane/afrimgsm/data/zul/test.tsv"
-BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAE_Finetune"
-TOKENIZER_SRC = "Qwen/Qwen2.5-Math-7B"  # base tokenizer
+BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
+ADAPTER_PATH = "output/QZAE_GRPO_BASE/pretrained"
 MAX_NEW_TOKENS = 512
-OUT_CSV = "generated_predictions_QZAE_merged.csv"
+OUT_CSV = f"generated_predictions_{NAME}.csv"
 EVAL_DIR = "predictions"
-EVAL_PATH = os.path.join(EVAL_DIR, "evaluation_QZAE_merged.csv")
+EVAL_PATH = os.path.join(EVAL_DIR, f"evaluation_{NAME}.csv")
 
 # ----------------------------
 # Helpers
@@ -50,14 +51,13 @@ questions = df["question"].tolist()
 # ----------------------------
 # Load model & tokenizer
 # ----------------------------
-tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_SRC, use_fast=True)
-model = AutoModelForCausalLM.from_pretrained(
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
+base_model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     torch_dtype=torch.float16,
     device_map="auto",
 )
-
-model.eval()
+model = PeftModel.from_pretrained(base_model, ADAPTER_PATH).eval()
 
 # ----------------------------
 # Generation pipeline
@@ -81,15 +81,22 @@ generation_args = {
 # ----------------------------
 generated_cots = []
 for i, q in enumerate(questions):
-    prompt = f"Q: {q}\nA: "
-    output = generator(prompt, **generation_args)[0]["generated_text"]
+    prompt = f"Q: {q}\n A: "
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=MAX_NEW_TOKENS,
+            do_sample=False,
+            pad_token_id=tokenizer.eos_token_id,
+        )
+    
+    # Decode only the new tokens
+    generated_text = tokenizer.decode(outputs[0][inputs['input_ids'].shape[1]:], skip_special_tokens=True)
+    print(f"\nQ{i+1}: {q}\n Generated CoT: {generated_text}")
+    generated_cots.append(generated_text)
 
-    # Keep only the text after "A:"
-    match = re.search(r"Q:.*?\nA:(.*)", output, re.DOTALL)
-    cot = match.group(1).strip() if match else ""
-
-    print(f"\nQ{i+1}: {q}\n Generated CoT: {cot}")
-    generated_cots.append(cot)
 
 # ----------------------------
 # Save generations
@@ -134,7 +141,7 @@ accuracy = (correct / total * 100.0) if total else 0.0
 print(f"\nTotal: {total}")
 print(f"Correct: {correct}")
 print(f"Incorrect: {total - correct}")
-print(f"CoT with no answer found (no #### and no <answer>): {bad_format}")
+print(f"CoT with no answer found (no ####): {bad_format}")
 print(f"\nAccuracy: {accuracy:.2f}%")
 
 # ----------------------------

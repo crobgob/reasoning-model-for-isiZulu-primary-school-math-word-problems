@@ -27,4 +27,4 @@ pip list | grep transformers
 
 
 cd "$SLURM_SUBMIT_DIR"
-srun python finetune_qwen_lora.py
+srun python gen_and_eval.py
