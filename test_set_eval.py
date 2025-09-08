@@ -43,15 +43,11 @@ base_model_clean = AutoModelForCausalLM.from_pretrained(
     device_map="auto",
 )
 
-# Load another instance of the base and apply the adapter to that instance
 base_model_for_adapter = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     torch_dtype=torch.float16,
     device_map="auto",
 )
-
-# Apply the saved adapter to the separate base instance. The resulting object is the
-# model we will use for generation/evaluation.
 model = PeftModel.from_pretrained(base_model_for_adapter, ADAPTER_PATH).eval()
 
 # Generation pipeline - is this necessary?
