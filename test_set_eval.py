@@ -63,7 +63,6 @@ generation_args = {
 # Prompt for CoT on the 250 test questions
 generated_cots = []
 for i, q in enumerate(questions):
-    # Match the prompt template used during training: no leading space before 'A:'
     prompt = f"Q: {q}\nA: "
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     
