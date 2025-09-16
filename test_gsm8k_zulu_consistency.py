@@ -1,3 +1,6 @@
+# Test script to check consistency between CoT and answer column in GSM8K Zulu dataset
+# Corey Webb, BSc Hons 2025, UCT
+
 import unittest
 import pandas as pd
 import re

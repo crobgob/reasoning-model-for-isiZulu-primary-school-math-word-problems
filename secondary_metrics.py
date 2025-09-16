@@ -1,3 +1,6 @@
+#Script that assesses pass@k and maj@k metrics
+#Corey Webb BSc Hons 2025, UCT
+
 import pandas as pd
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from peft import PeftModel
@@ -6,10 +9,10 @@ import re
 from collections import Counter
 import os
 
-# MAKE SURE PROMPT IS IN SAME FORMAT AS TRAINING - line 63
-NAME = "QZAE_GRPO"
-BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAE_Finetune"
-ADAPTER_PATH = "output/QZAE_GRPO/final_model"
+# MAKE SURE PROMPT IS IN SAME FORMAT AS TRAINING - line 69
+NAME = "QZAZ_FINETUNE"
+BASE_MODEL = "/scratch/wbbcor001/Qwen_QZAZ_Finetune"
+ADAPTER_PATH = None
 MAX_NEW_TOKENS = 512
 OUT_CSV = f"predictions_pass8_maj8_{NAME}.csv"
 EVAL_DIR = "metrics"
@@ -31,7 +34,7 @@ if ADAPTER_PATH:
     model = PeftModel.from_pretrained(model, ADAPTER_PATH, is_trainable=False).eval()
 model.eval()
 
-# Text generation pipeline
+# Text generation pipeline - is this necessary?
 generator = pipeline(
     "text-generation",
     model=model,
@@ -40,7 +43,7 @@ generator = pipeline(
     torch_dtype=torch.float16,
 )
 
-# Inference config (non-zero temperature for sampling)
+# Inference config (non-zero temperature for sampling is important - wang et al 2023 used 0.7)
 generation_args = {
     "max_new_tokens": MAX_NEW_TOKENS,
     "do_sample": True,
@@ -66,7 +69,7 @@ maj_at_8 = 0
 all_preds = []
 
 for i, (q, gt) in enumerate(zip(questions, answers)):
-    prompt = f"Q: {q}\nA: " #Make sure to keep format that is the same as in training
+    prompt = f"Q: {q}\nA: " #Make sure to keep format that is the same as in training!!! NB!! Even small changes result in massive performance differences.
     outputs = generator(prompt, **generation_args)
 
     cots = []

@@ -1,3 +1,8 @@
+#Script that performs supervised fine-tuning of Qwen2.5-Math-7B using LoRA on GSM8K dataset with chain-of-thought answers
+#Corey Webb BSc Hons 2025, UCT
+
+
+
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, random_split
@@ -13,19 +18,19 @@ import os
 import wandb
 
 #GO OVER ALL OF THESE BEFORE TRAINING
-BASE_MODEL = "Qwen/Qwen2.5-Math-7B"
-dataset = "GSM8K_Zulu.parquet"
+BASE_MODEL = "Qwen/Qwen2.5-Math-7B"  # Pretrained base model
+dataset = "GSM8K_Zulu.parquet" #Our translattion of the GSM8K dataset
 job_name = "finetune_QZAZ"
-dataset = "GSM8K_Zulu.parquet"
+
 
 
 #wandb logging
-wandb.init(project=f"{job_name}", name=f"{job_name}")
+# wandb.init(project=f"{job_name}", name=f"{job_name}")
 
-# Load and randomise dataset from Parquet
+# Load and randomise dataset from Parquet just there is structure in the dataset.
 df = pd.read_parquet(dataset).sample(frac=1.0, random_state=42).reset_index(drop=True)
 
-# Format each row as a string: "Q: question\nA: chain-of-thought"
+# Format each row as a string: "Q: question\nA: chain-of-thought" - similar to Qwen2.5-Math-papera
 formatted_texts = [f"Q: {q}\nA: {cot}" for q, cot in zip(df["question"], df["CoT"])]
 
 # Load tokenizer and model
@@ -51,7 +56,7 @@ model.config.use_cache = False
 
 # Configure LoRA
 peft_config = LoraConfig(
-    r=32,
+    r=32, # Retains pretty much all performance of full fine-tuning
     lora_alpha=64,
     lora_dropout=0.05,
     bias="none",
@@ -76,7 +81,7 @@ class QADataset(Dataset):
             text, 
             truncation=True, 
             max_length=self.max_length, 
-            padding= "max_length",
+            padding= "max_length", # Padds to max length for batching - not sure of other ways to do this
             return_tensors="pt"
         )
         input_ids = tokens["input_ids"].squeeze()
@@ -109,7 +114,7 @@ data_collator = default_data_collator
 
 # Training configuration
 training_args = TrainingArguments(
-    output_dir="output",
+    output_dir=f"output/{job_name}",
     overwrite_output_dir=True,
     num_train_epochs=10,
     per_device_train_batch_size=16,  # maybe increase
@@ -123,7 +128,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="eval_loss",
     greater_is_better=False,
-    report_to="wandb",
+    report_to="wandb", # Look at comments at top of script - will need to log into wandb and initialise
     gradient_checkpointing=True,
 )
 

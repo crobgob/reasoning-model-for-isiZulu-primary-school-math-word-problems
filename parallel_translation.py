@@ -1,4 +1,4 @@
-# Parallelised version of main.py
+# Parallelised version of TranslateGSM8K.py
 # Note line 61 I have reduced dataset size to 10 for safety.
 # Program that creates a parquet dataframe for GSM8K translated to Zulu. We will have three columns: question, CoT and answer.
 # Corey Webb, BSc Hons 2025, UCT

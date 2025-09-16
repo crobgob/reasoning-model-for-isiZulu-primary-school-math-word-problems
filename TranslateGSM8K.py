@@ -8,7 +8,7 @@ from google.oauth2 import service_account
 
 def translate_to_zul(text="Hello, world!", project_id="boreal-rain-465311-e2"):
     credentials = service_account.Credentials.from_service_account_file(
-        'D:/HonoursProject/keys/boreal-rain-465311-e2-65805b7c44c1.json'
+        'D:/HonoursProject/keys/boreal-rain-465311-e2-65805b7c44c1.json' #My private key storedas a json file
     )
     client = translate.TranslationServiceClient(credentials=credentials)
     
@@ -19,7 +19,7 @@ def translate_to_zul(text="Hello, world!", project_id="boreal-rain-465311-e2"):
             "parent": parent,
             "contents": [text],
             "mime_type": "text/plain",
-            "source_language_code": "en-US",
+            "source_language_code": "en-US", #GSM8K is originally in US English
             "target_language_code": "zu",
         }
     )
@@ -29,14 +29,13 @@ def translate_to_zul(text="Hello, world!", project_id="boreal-rain-465311-e2"):
 
     return translation.translated_text
 
-#Don't use translated cot bc could be wrong
 #All cot answers end in ###{answer}
 def extract_ans(cot_answer):
     split = cot_answer.split("####")
     #Checks that there is one and only one answer
     if len(split) == 2:
         ans = int(split[1].replace(",", "").strip())
-        return ans
+        return ans #Gets the final answer after the ####
     else:
         print("Expected one answer, found {}".format(len(split) - 1))
 

@@ -1,5 +1,5 @@
-#grpo for eliciting reasoning in Zulu math problems
-# This script uses the GRPOTrainer from the trl library to train a model using a dataset of Zulu math problems.
+#python script to add a GRPO layer on top of an already fine-tuned LLM.
+#This script uses the GRPOTrainer from the trl library to train a model using a dataset of Zulu math problems.
 #Corey Webb, UCT, BSc Hons 2025
 import re
 import pandas as pd
@@ -8,15 +8,21 @@ from trl import GRPOConfig, GRPOTrainer
 from peft import LoraConfig, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
-import wandb
+# Will need to log into your wandb account first
+# import wandb 
 
+
+#####################
+# Config
+#####################
+#Make sure to check all of these
 dataset = "GSM8K_Zulu.parquet"
 job_name = "QZAZ_GRPO"
-base_path = "/scratch/wbbcor001/Qwen_QZAZ_Finetune"
+base_path = "/scratch/wbbcor001/Qwen_QZAZ_Finetune" # Path to the fine-tuned model
 
 
 #wandb logging
-wandb.init(project=f"{job_name}", name=f"{job_name}")
+# wandb.init(project=f"{job_name}", name=f"{job_name}")
 
 
 # 4. Define reward function
@@ -37,7 +43,7 @@ def format_reward_func(completions, ground_truth, **kwargs):
             else:
                 completion_contents.append("")
     
-        num_generations = len(completion_contents) // len(ground_truth) # num generations doesn't match ground truth so we need to tile
+        num_generations = len(completion_contents) // len(ground_truth) # num generations doesn't match ground truth (We need 8 ground truth because we sample 8 times for each question) so we need to tile
         ground_truth_tiled = [gt for gt in ground_truth for _ in range(num_generations)]
 
         for content, gt in zip(completion_contents, ground_truth_tiled):
@@ -67,17 +73,17 @@ for question in df['question']:
 ground_truth = df['answer'].astype(str).tolist()
 dataset = Dataset.from_dict({
     "prompt": prompts,
-    "ground_truth": ground_truth
+    "ground_truth": ground_truth                        
 })
 
 
 #  LoRA (Parameter-efficient training)
 lora_config = LoraConfig(
     task_type="CAUSAL_LM",
-    r=16,                    # (lower = less memory)
-    lora_alpha=32,
-    lora_dropout=0.1,
-    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+    r=16,                    # 16 retains almost all performance of full fine-tuning
+    lora_alpha=32, #this value is usually 2x the r value
+    lora_dropout=0.1, #Seemed to work well
+    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"], #Not sure which target modules are best for Qwen2.5
     bias="none",
 )
 
@@ -87,23 +93,23 @@ training_args = GRPOConfig(
     per_device_train_batch_size=2,        # Small batch size due to memory constraints
     gradient_accumulation_steps=4,
     bf16=True,                 # Saves VRAM
-    max_completion_length=512,         
+    max_completion_length=512,         #Generated output usually completed before 512 tokens
     max_prompt_length=512,  
     num_generations=8,  # Number of generations per prompt
     remove_unused_columns=False,      # Keep ground_truth column
     logging_steps=10,
     save_strategy="steps",
     save_steps=500,
-    report_to="wandb",
-    save_total_limit=3,  # Keep only the last 3 checkpoints
+    report_to="wandb", # Look at comments at top of script - will need to log into wandb and initialise
+    save_total_limit=3,  # Keep only the last 3 checkpoints bc limited disk space
 )
 
 
-model = AutoModelForCausalLM.from_pretrained(base_path)
-model = get_peft_model(model, lora_config)
-print(model.print_trainable_parameters())
+model = AutoModelForCausalLM.from_pretrained(base_path) #Load the fine-tuned base model
+model = get_peft_model(model, lora_config) #Add LoRA layers
+print(model.print_trainable_parameters()) # For debug - making sure that params are trainable
 
-# GRPO trainer
+# GRPO trainer from trl library
 trainer = GRPOTrainer(
     model=model,  
     reward_funcs=[format_reward_func], 
@@ -112,7 +118,7 @@ trainer = GRPOTrainer(
 )
 
 # training
-print(f"Starting training with {len(dataset)} examples...")
+print(f"Starting training with {len(dataset)} examples...") # For debug 
 try:
     trainer.train(resume_from_checkpoint=True)
 except:
