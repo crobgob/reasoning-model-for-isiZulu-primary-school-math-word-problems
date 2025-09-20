@@ -37,12 +37,18 @@ questions = df["question"].tolist()
 
 #Loading model + adapter path and tokeniser
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
-base_model = AutoModelForCausalLM.from_pretrained(
+base_model_clean = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     torch_dtype=torch.float16,
     device_map="auto",
 )
-model = PeftModel.from_pretrained(base_model, ADAPTER_PATH).eval()
+
+base_model_for_adapter = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL,
+    torch_dtype=torch.float16,
+    device_map="auto",
+)
+model = PeftModel.from_pretrained(base_model_for_adapter, ADAPTER_PATH).eval()
 
 # Generation pipeline - is this necessary?
 generator = pipeline(
